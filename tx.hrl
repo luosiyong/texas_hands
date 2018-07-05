@@ -114,8 +114,8 @@
 		  aid,
 		  cards,
 		  rank,
-		  score,
-		  high
+		  high,
+		  score
 		 }).
 
 -record(tx_side_pot, {

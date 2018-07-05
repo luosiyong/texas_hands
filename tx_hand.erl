@@ -1,5 +1,9 @@
 -module(tx_hand).
 -export([rank/1, rank_value/1]).
+-export([compare/2, valid/1]).
+-export([make_cards/1, make_card/1]).
+-export([describe/1]).
+-export([face/1, suit/1]).
 -export([print_bin/1, print_rep/1, test/0]).
 
 -include("tx.hrl").
@@ -12,6 +16,33 @@ rank(Hand) ->
 	  high = High,
 	  score = Score
 	 }.
+
+% compare card list A and B
+compare(A, B) ->
+	HA = rank(#tx_hand{cards = A}),
+	HB = rank(#tx_hand{cards = B}),
+	RankValueA = rank_value(HA#tx_hand.rank),
+	RankValueB = rank_value(HB#tx_hand.rank),
+	if
+		RankValueA > RankValueB -> 1;
+		RankValueA < RankValueB -> -1;
+		true ->
+			if
+				HA#tx_hand.high > HB#tx_hand.high -> 1;
+				HA#tx_hand.high < HB#tx_hand.high -> -1;
+				true ->
+					if
+						HA#tx_hand.score > HB#tx_hand.score -> 1;
+						HA#tx_hand.score < HB#tx_hand.score -> -1;
+						true -> 0
+					end
+			end
+	end.
+
+valid(Cards) ->
+	H = rank(#tx_hand{cards = Cards}),
+	#tx_hand{high = High} = H,
+	lists:filter(fun(X) -> face(element(1, X)) band High > 0 end, Cards).
 
 score(Rep) ->
 	score([fun is_royal_flush/1,
@@ -335,6 +366,64 @@ suit(Suit) when is_number(Suit) ->
 		3 -> hearts;
 		4 -> spades
 	end.
+
+describe({royal_flush, High, _Score}) ->
+	"royal flush high "
+	++ atom_to_list(face(High))
+	++ "s";
+
+describe({straight_flush, High, _Score}) ->
+	"straight flush high "
+	++ atom_to_list(face(High))
+	++ "s";
+
+describe({four_kind, High, _Score}) ->
+	"four of a kind "
+	++ atom_to_list(face(High))
+	++ "s";
+
+describe({full_house, High, _Score}) ->
+	Bin = <<High:32>>,
+	<<High3:16, High2:16>> = Bin,
+	"house of "
+	++ atom_to_list(face(High3))
+	++ "s full of "
+	++ atom_to_list(face(High2))
+	++ "s";
+
+describe({flush, High, _Score}) ->
+	"flush high "
+	++ atom_to_list(face(High))
+	++ "s";
+
+describe({straight, High, _Score}) ->
+	"straight high "
+	++ atom_to_list(face(High))
+	++ "s";
+
+describe({three_kind, High, _Score}) ->
+	"three of a kind "
+	++ atom_to_list(face(High))
+	++ "s";
+
+describe({two_pair, High, _Score}) ->
+	High1 = face(High),
+	HighVal2 = High band (bnot face(High1)),
+	High2 = face(HighVal2),
+	"two pairs of "
+	++ atom_to_list(High1)
+	++ "s and "
+	++ atom_to_list(High2)
+	++ "s";
+
+describe({pair, High, _Score}) ->
+	"pair of "
+	++ atom_to_list(face(High))
+	++ "s";
+
+describe({junk, High, _Score}) ->
+	"high card "
+	++ atom_to_list(face(High)).
 
 %%%
 %%% Test suite
