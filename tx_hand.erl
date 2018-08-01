@@ -1,6 +1,6 @@
 -module(tx_hand).
 -export([rank/1, rank_value/1]).
--export([compare/2, valid/1]).
+-export([compare/2, valid/1, high_score/1]).
 -export([make_cards/1, make_card/1]).
 -export([describe/1]).
 -export([face/1, suit/1]).
@@ -43,6 +43,121 @@ valid(Cards) ->
 	H = rank(#tx_hand{cards = Cards}),
 	#tx_hand{high = High} = H,
 	lists:filter(fun(X) -> face(element(1, X)) band High > 0 end, Cards).
+
+high_score(Cards) ->
+	H = rank(#tx_hand{cards = Cards}),
+	#tx_hand{rank = Rank, high = High, score = Score} = H,
+	{HighCards, ScoreCards} = high_score(Cards, Rank, High, Score),
+	ValidCards = HighCards ++ ScoreCards,
+	{ValidCards, rank_value(Rank), HighCards, ScoreCards}.
+
+high_score(Cards, royal_flush, High, _Score) ->
+	HighCards = lists:filter(fun(X) -> face(element(1, X)) band High > 0 end, Cards),
+	[C, D, H, S] = Rep = make_rep(Cards),
+	Mask = make_mask(Rep),
+	CC = tx_bits:bits1(Mask band C),
+	CD = tx_bits:bits1(Mask band D),
+	CH = tx_bits:bits1(Mask band H),
+	CS = tx_bits:bits1(Mask band S),
+	if
+		CC >= 5 ->
+			{lists:filter(fun(X) -> suit(element(2, X)) == 1 end, HighCards), []};
+		CD >= 5 ->
+			{lists:filter(fun(X) -> suit(element(2, X)) == 2 end, HighCards), []};
+		CH >= 5 ->
+			{lists:filter(fun(X) -> suit(element(2, X)) == 3 end, HighCards), []};
+		CS >= 5 ->
+			{lists:filter(fun(X) -> suit(element(2, X)) == 4 end, HighCards), []};
+		true ->
+			{HighCards, []}
+	end;
+
+high_score(Cards, straight_flush, High, _Score) ->
+	HighCards = lists:filter(fun(X) -> face(element(1, X)) band High > 0 end, Cards),
+	[C, D, H, S] = Rep = make_rep(Cards),
+	Mask = make_mask(Rep),
+	CC = tx_bits:bits1(Mask band C),
+	CD = tx_bits:bits1(Mask band D),
+	CH = tx_bits:bits1(Mask band H),
+	CS = tx_bits:bits1(Mask band S),
+	if
+		CC >= 5 ->
+			{lists:filter(fun(X) -> suit(element(2, X)) == 1 end, HighCards), []};
+		CD >= 5 ->
+			{lists:filter(fun(X) -> suit(element(2, X)) == 2 end, HighCards), []};
+		CH >= 5 ->
+			{lists:filter(fun(X) -> suit(element(2, X)) == 3 end, HighCards), []};
+		CS >= 5 ->
+			{lists:filter(fun(X) -> suit(element(2, X)) == 4 end, HighCards), []};
+		true ->
+			{HighCards, []}
+	end;
+
+high_score(Cards, full_house, High, _Score) ->
+	F = fun(Card, {M, R}) ->
+			Face = face(element(1, Card)),
+			io:format("~p luo debug: ~p ~p ~p ~p ~p~n", [?MODULE, Card, Face, High, M, R]),
+			if
+				(Face bsl 16) band High > 0 ->
+					case maps:get(Face, M, 0) >= 3 of
+						true ->
+							{M, R};
+						false ->
+							{maps:put(Face bsl 16, maps:get(Face bsl 16, M, 0) + 1, M), [Card|R]}
+					end;
+				Face band High > 0 ->
+					case maps:get(Face, M, 0) >= 2 of
+						true ->
+							{M, R};
+						false ->
+							{maps:put(Face, maps:get(Face, M, 0) + 1, M), [Card|R]}
+					end;
+				true ->
+					{M, R}
+			end
+		end,
+	{_, HighCards} = lists:foldl(F, {#{}, []}, Cards),
+	{HighCards, []};
+
+high_score(Cards, flush, High, _Score) ->
+	HighCards = lists:filter(fun(X) -> face(element(1, X)) band High > 0 end, Cards),
+	[C, D, H, S] = Rep = make_rep(Cards),
+	Mask = make_mask(Rep),
+	CC = tx_bits:bits1(Mask band C),
+	CD = tx_bits:bits1(Mask band D),
+	CH = tx_bits:bits1(Mask band H),
+	CS = tx_bits:bits1(Mask band S),
+	if
+		CC >= 5 ->
+			{lists:filter(fun(X) -> suit(element(2, X)) == 1 end, HighCards), []};
+		CD >= 5 ->
+			{lists:filter(fun(X) -> suit(element(2, X)) == 2 end, HighCards), []};
+		CH >= 5 ->
+			{lists:filter(fun(X) -> suit(element(2, X)) == 3 end, HighCards), []};
+		CS >= 5 ->
+			{lists:filter(fun(X) -> suit(element(2, X)) == 4 end, HighCards), []};
+		true ->
+			{HighCards, []}
+	end;
+
+high_score(Cards, straight, High, _Score) ->
+	HighCards = lists:filter(fun(X) -> face(element(1, X)) band High > 0 end, Cards),
+	F = fun(Card, {M, R}) ->
+			Face = face(element(1, Card)),
+			case maps:get(Face, M, 0) > 0 of
+				true ->
+					{M, R};
+				false ->
+					{maps:put(Face, 1, M), [Card|R]}
+			end
+		end,
+	{_, HighCards1} = lists:foldl(F, {#{}, []}, HighCards),
+	{HighCards1, []};
+
+high_score(Cards, _Rank, High, Score) ->
+	HighCards = lists:filter(fun(X) -> face(element(1, X)) band High > 0 end, Cards),
+	ScoreCards = lists:filter(fun(X) -> face(element(1, X)) band Score > 0 end, Cards),
+	{HighCards, ScoreCards}.
 
 score(Rep) ->
 	score([fun is_royal_flush/1,
